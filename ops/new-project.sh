@@ -42,6 +42,14 @@ confirm() {
   read -r -p "$1 [y/N] " answer
   [ "$answer" = "y" ] || [ "$answer" = "Y" ]
 }
+# Print the ref of the Supabase project with this name, or nothing. Never fails, so a CLI that
+# doesn't print JSON falls through to the paste prompt instead of stopping the script.
+project_ref() {
+  { supabase projects list --output-format json 2>/dev/null \
+      || supabase projects list -o json 2>/dev/null || true; } \
+    | jq -r --arg n "$1" '[.[] | select(.name == $n)][0] | (.ref // .id // empty)' 2>/dev/null \
+    || true
+}
 
 step "0. Check tools and logins"
 for tool in gh supabase vercel jq openssl perl; do
@@ -148,8 +156,7 @@ if [ -n "$ORG_ID" ] && confirm "Create Supabase project $NAME-dev in org $ORG_ID
   DB_PASSWORD="$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-32)"
   supabase projects create "$NAME-dev" --org-id "$ORG_ID" --db-password "$DB_PASSWORD" \
     --region "$SUPABASE_REGION"
-  REF="$(supabase projects list -o json \
-    | jq -r --arg n "$NAME-dev" '[.[] | select(.name == $n)][0] | (.ref // .id // empty)')"
+  REF="$(project_ref "$NAME-dev")"
   if [ -z "$REF" ]; then
     read -r -p "Couldn't read the project ref. Paste it from the dashboard URL: " REF
   fi
