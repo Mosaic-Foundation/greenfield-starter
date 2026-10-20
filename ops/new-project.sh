@@ -200,8 +200,10 @@ cat <<EOF
                                     (the service_role or secret key)
   [ ] Add $REPO to the Claude GitHub App's selected repositories: https://github.com/apps/claude
   [ ] Cloud environment "$NAME" at claude.ai/code (runbook Phase 1 step 6): Custom network with
-      the default list, plus cdn.playwright.dev and playwright.download.prss.microsoft.com; paste
-      ops/cloud-environment-setup.sh into its Setup script field
+      the default list, plus cdn.playwright.dev and playwright.download.prss.microsoft.com, plus
+      public.ecr.aws if the default list lacks it (Supabase images), plus every host the spec
+      says to record test fixtures from; paste ops/cloud-environment-setup.sh into its Setup
+      script field
   [ ] Put the spec under docs/spec/ and accepted ADRs under decisions/, through a PR
       (the ruleset blocks direct pushes, including yours)
   [ ] claude.ai/code > Projects > New project: repo $REPO only, then paste
