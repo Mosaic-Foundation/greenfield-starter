@@ -67,14 +67,24 @@ confirm "Continue with these settings?" || exit 0
 
 # ---------------------------------------------------------------------------------------------
 step "1. Create the GitHub repo from the template"
+# Every step checks for what an earlier run already made, so the script is safe to run again
+# after a failure (answer y to the steps that didn't finish).
 if confirm "Create $REPO and clone it into $DIR?"; then
-  gh repo create "$REPO" --template "$TEMPLATE" "--$VISIBILITY"
+  if gh api "repos/$REPO" >/dev/null 2>&1; then
+    echo "$REPO already exists; not creating it."
+  else
+    gh repo create "$REPO" --template "$TEMPLATE" "--$VISIBILITY"
+  fi
   # GitHub generates template repos asynchronously; wait until the first commit exists.
   for _ in $(seq 1 30); do
     gh api "repos/$REPO/commits?per_page=1" >/dev/null 2>&1 && break
     sleep 2
   done
-  ( cd "$WORKDIR" && gh repo clone "$REPO" )
+  if [ -d "$DIR/.git" ]; then
+    echo "$DIR already exists; not cloning."
+  else
+    ( cd "$WORKDIR" && gh repo clone "$REPO" )
+  fi
 fi
 [ -d "$DIR/.git" ] || { echo "No local clone at $DIR; stopping." >&2; exit 1; }
 
@@ -97,8 +107,12 @@ if confirm "Rename the app to $NAME, write $REPO into the rules, copy the design
       echo "Design system not found at $DS; skipping. Set MONO=<path> to point at Civic-Social-Mono."
     fi
     git add -A
-    git commit -m "Setup: name the app $NAME, fill in the repo, vendor the design system"
-    git push origin main )
+    if git diff --cached --quiet; then
+      echo "Nothing to change; an earlier run already did this."
+    else
+      git commit -m "Setup: name the app $NAME, fill in the repo, vendor the design system"
+      git push origin main
+    fi )
 fi
 
 # ---------------------------------------------------------------------------------------------
@@ -118,7 +132,9 @@ fi
 
 # ---------------------------------------------------------------------------------------------
 step "3. Ruleset on main: PR required, ci must pass from GitHub Actions, no force push or deletion"
-if confirm "Create the ruleset?"; then
+if gh api "repos/$REPO/rulesets" --jq '.[].name' 2>/dev/null | grep -qx 'protect main'; then
+  echo "The ruleset already exists: https://github.com/$REPO/settings/rules"
+elif confirm "Create the ruleset?"; then
   gh api -X POST "repos/$REPO/rulesets" --input - <<'JSON'
 {
   "name": "protect main",
@@ -149,11 +165,21 @@ fi
 
 # ---------------------------------------------------------------------------------------------
 step "4. Supabase dev project, with its secrets in a main-only GitHub environment"
-echo "Use a Supabase organization that holds only this project's dev database."
-echo "Your organizations:"
-supabase orgs list || true
-read -r -p "Organization ID to create $NAME-dev in (blank to skip this step): " ORG_ID
-REF=""
+REF="$(project_ref "$NAME-dev")"
+ORG_ID=""
+if [ -n "$REF" ]; then
+  echo "Supabase project $NAME-dev already exists (ref $REF); not creating it."
+  echo "If an earlier run stopped before storing its secrets, reset the database password in the"
+  echo "dashboard, then run:"
+  echo "  gh secret set SUPABASE_DB_PASSWORD --repo $REPO --env supabase-dev"
+  echo "  gh variable set SUPABASE_PROJECT_REF --repo $REPO --body $REF"
+  echo "and create the supabase-dev environment and scoped token as in the runbook."
+else
+  echo "Use a Supabase organization that holds only this project's dev database."
+  echo "Your organizations:"
+  supabase orgs list || true
+  read -r -p "Organization ID to create $NAME-dev in (blank to skip this step): " ORG_ID
+fi
 if [ -n "$ORG_ID" ] && confirm "Create Supabase project $NAME-dev in org $ORG_ID?"; then
   DB_PASSWORD="$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-32)"
   supabase projects create "$NAME-dev" --org-id "$ORG_ID" --db-password "$DB_PASSWORD" \
@@ -196,7 +222,8 @@ if confirm "Create Vercel project $NAME in ${VERCEL_SCOPE:-the active team} and 
   # Unquoted on purpose: expands to nothing, or to the two words --scope <team>.
   # shellcheck disable=SC2086
   ( cd "$DIR"
-    vercel project add "$NAME" ${VERCEL_SCOPE:+--scope "$VERCEL_SCOPE"}
+    vercel project add "$NAME" ${VERCEL_SCOPE:+--scope "$VERCEL_SCOPE"} \
+      || echo "(couldn't add it; if it already exists, linking below still works)"
     vercel link --yes --project "$NAME" ${VERCEL_SCOPE:+--scope "$VERCEL_SCOPE"}
     vercel git connect --yes ${VERCEL_SCOPE:+--scope "$VERCEL_SCOPE"} )
 fi
