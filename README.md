@@ -33,7 +33,7 @@ Installs use npm 12.2.0, as in the Civic Hub CI.
 | `.claude/skills/finish-task/SKILL.md` | Steps from finished code to merged PR |
 | `ops/new-project.sh` | Phase 1 setup script; run in your Mac Terminal, never in a Claude session |
 | `ops/project-instructions.template.md` | Text for the Claude Code project's instructions |
-| `ops/cloud-environment-setup.sh` | Paste into the cloud environment's Setup script field (Node 24, npm 12, Playwright Chromium) |
+| `ops/cloud-environment-setup.sh` | Paste into the cloud environment's Setup script field (Node 24, npm 12, Playwright Chromium, cached Supabase images) |
 
 ## Starting a new project
 
