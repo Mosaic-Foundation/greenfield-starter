@@ -1,12 +1,20 @@
 // Server lint rules. They enforce the same boundaries the Civic Hub uses:
 //   1. Environment variables are read only through src/config/env.ts.
 //   2. The raw Supabase client is imported only under src/db/ (and scripts/, tests/).
-// The UI has its own config in ui/eslint.config.js.
+// The UI has its own config in ui/eslint.config.js. docs/ holds reference copies of code from
+// other repos (read, never imported), so it is not linted.
 import tsParser from "@typescript-eslint/parser";
 
 export default [
   {
-    ignores: ["dist/**", "ui/**", "node_modules/**", "playwright-report/**", "test-results/**"],
+    ignores: [
+      "dist/**",
+      "ui/**",
+      "docs/**",
+      "node_modules/**",
+      "playwright-report/**",
+      "test-results/**",
+    ],
   },
   {
     files: ["**/*.ts"],
