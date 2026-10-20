@@ -13,7 +13,8 @@
 #   TEMPLATE        template repo                     (default: $GH_OWNER/greenfield-starter)
 #   VISIBILITY      public | private                  (default: public; rulesets on private repos
 #                                                      need a paid GitHub plan)
-#   VERCEL_SCOPE    Vercel team slug                  (default: creatinglake)
+#   VERCEL_SCOPE    Vercel team slug                  (default: the CLI's active team, shown by
+#                                                      'vercel whoami'; change it with 'vercel switch')
 #   SUPABASE_REGION Supabase region                   (default: us-east-1)
 #   MONO            path to Civic-Social-Mono         (default: ~/Developer/Civic-Social-Mono)
 
@@ -28,7 +29,7 @@ fi
 GH_OWNER="${GH_OWNER:-Mosaic-Foundation}"
 TEMPLATE="${TEMPLATE:-$GH_OWNER/greenfield-starter}"
 VISIBILITY="${VISIBILITY:-public}"
-VERCEL_SCOPE="${VERCEL_SCOPE:-creatinglake}"
+VERCEL_SCOPE="${VERCEL_SCOPE:-}"
 SUPABASE_REGION="${SUPABASE_REGION:-us-east-1}"
 MONO="${MONO:-$HOME/Developer/Civic-Social-Mono}"
 REPO="$GH_OWNER/$NAME"
@@ -59,7 +60,8 @@ gh auth status >/dev/null 2>&1 || { echo "Run: gh auth login" >&2; exit 1; }
 gh api "repos/$TEMPLATE" --jq '.is_template' 2>/dev/null | grep -q true \
   || { echo "$TEMPLATE is not marked as a template repo. See One-time setup in the runbook." >&2; exit 1; }
 echo "Repo:     $REPO ($VISIBILITY) from template $TEMPLATE, cloned to $DIR"
-echo "Vercel:   team $VERCEL_SCOPE, project $NAME"
+echo "Vercel:   project $NAME in team ${VERCEL_SCOPE:-(the active team below)}"
+[ -n "$VERCEL_SCOPE" ] || vercel whoami 2>&1 | sed 's/^/          /' || true
 echo "Supabase: project $NAME-dev in $SUPABASE_REGION"
 confirm "Continue with these settings?" || exit 0
 
@@ -190,11 +192,13 @@ fi
 step "5. Vercel project connected to the repo"
 echo "Vercel's GitHub app must have access to $REPO (github.com/settings/installations, or the"
 echo "$GH_OWNER org's installed apps), or 'vercel git connect' fails."
-if confirm "Create Vercel project $NAME in $VERCEL_SCOPE and connect it to $REPO?"; then
+if confirm "Create Vercel project $NAME in ${VERCEL_SCOPE:-the active team} and connect it to $REPO?"; then
+  # Unquoted on purpose: expands to nothing, or to the two words --scope <team>.
+  # shellcheck disable=SC2086
   ( cd "$DIR"
-    vercel project add "$NAME" --scope "$VERCEL_SCOPE"
-    vercel link --yes --project "$NAME" --scope "$VERCEL_SCOPE"
-    vercel git connect --yes --scope "$VERCEL_SCOPE" )
+    vercel project add "$NAME" ${VERCEL_SCOPE:+--scope "$VERCEL_SCOPE"}
+    vercel link --yes --project "$NAME" ${VERCEL_SCOPE:+--scope "$VERCEL_SCOPE"}
+    vercel git connect --yes ${VERCEL_SCOPE:+--scope "$VERCEL_SCOPE"} )
 fi
 
 # ---------------------------------------------------------------------------------------------
